@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+celery
+redis
+python-gitlab
+requests
+pydantic
+chromadb
+langchain
+langgraph
+orjson
+python-dotenv
+ollama
