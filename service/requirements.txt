@@ -8,6 +8,13 @@ pydantic
 chromadb
 langchain
 langgraph
+lmnr[all]
 orjson
 python-dotenv
 ollama
+sqlmodel
+weaviate-client
+loguru
+pydantic_settings
+langchain_ollama
+openai

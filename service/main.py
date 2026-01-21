@@ -1,13 +1,18 @@
 from fastapi import FastAPI
 from api import router
-from config import settings
 from lmnr import Laminar
+from dotenv import load_dotenv
+
+load_dotenv()
+from config import settings
 
 Laminar.initialize(
     base_url="http://localhost",
     http_port=8000,
     grpc_port=8001,
+    project_api_key="y8RPCDg22GxxlCYBwFjHKO9MD6FiBn36b6RG7AKeQgiysjnkmlDVvIZsBVGQlf8b"
 )
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="AI-powered GitLab MR reviewer",

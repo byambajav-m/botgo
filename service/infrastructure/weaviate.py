@@ -1,5 +1,5 @@
 import weaviate
-from weaviate.classes.config import Configure, Property, DataType
+from weaviate.classes.config import Property, DataType
 from weaviate.classes.query import MetadataQuery
 from typing import List
 from config import settings
@@ -22,7 +22,11 @@ def _generate_id(project_id: int, mr_iid: int) -> str:
 
 class WeaviateClient:
     def __init__(self):
-        self.client = weaviate.connect_to_local()
+        self.client = weaviate.connect_to_local(
+        host="localhost",
+        port="8888",
+        grpc_port=50051,
+    )
         self._ensure_collection()
 
     def _ensure_collection(self):

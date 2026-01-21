@@ -1,2 +1,13 @@
 .venv
 .idea
+__pycache__/
+*.pyc
+.DS_Store
+service/.env
+.vscode
+node_modules/
+dist/
+build/
+*.log
+.env
+*/.env

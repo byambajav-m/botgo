@@ -3,7 +3,7 @@ from typing import TypedDict, List, Optional
 
 from lmnr import observe
 
-from infrastructure import weaviate_client, gitlab_client, ollama_client
+from infrastructure import weaviate_client, gitlab_client, LLMWorker
 
 
 class ReviewState(TypedDict):
@@ -16,7 +16,7 @@ class ReviewState(TypedDict):
     error: Optional[str]
 
 @observe(name="fetch_mr_diff_step")
-def fetch_mr_diff(state: ReviewState) -> ReviewState:
+def fetch_mr_diff(state: ReviewState):
     try:
         diff = gitlab_client.get_mr_diff(state["project_id"], state["mr_iid"])
         state["diff"] = diff
@@ -26,7 +26,7 @@ def fetch_mr_diff(state: ReviewState) -> ReviewState:
         return state
 
 @observe(name="retrieve_context_step")
-def retrieve_context(state: ReviewState) -> ReviewState:
+def retrieve_context(state: ReviewState):
     try:
         if state.get("error"):
             return state
@@ -46,12 +46,17 @@ def retrieve_context(state: ReviewState) -> ReviewState:
         return state
 
 @observe(name="generate_review_step")
-def generate_review(state: ReviewState) -> ReviewState:
+async def generate_review(state: ReviewState):
     try:
         if state.get("error"):
             return state
 
-        summary, suggestion = ollama_client.generate_review(
+        # summary, suggestion = ollama_client.generate_review(
+        #     state["diff"],
+        #     state["similar_contexts"]
+        # )
+
+        summary, suggestion = await LLMWorker.generate_review(
             state["diff"],
             state["similar_contexts"]
         )
@@ -65,12 +70,13 @@ def generate_review(state: ReviewState) -> ReviewState:
         return state
 
 @observe(name="post_review_step")
-def post_review(state: ReviewState) -> ReviewState:
+def post_review(state: ReviewState):
+
     try:
         if state.get("error"):
             return state
 
-        note_body = f"""## 🤖 BotGo Review
+        note_body = f"""## 🐪 BotGo Review
 
                     **Summary:**
                     {state["review_summary"]}
@@ -103,8 +109,8 @@ def create_review_workflow():
     workflow.add_node("post_review", post_review)
 
     workflow.set_entry_point("fetch_diff")
-    workflow.add_edge("fetch_diff", "retrieve_context")
-    workflow.add_edge("retrieve_context", "generate_review")
+    workflow.add_edge("fetch_diff", "generate_review")
+    # workflow.add_edge("retrieve_context", "generate_review")
     workflow.add_edge("generate_review", "post_review")
     workflow.add_edge("post_review", END)
 

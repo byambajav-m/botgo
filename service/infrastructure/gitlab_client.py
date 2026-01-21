@@ -8,16 +8,50 @@ class GitLabClient:
             private_token=settings.GITLAB_TOKEN
         )
 
-    def get_mr_diff(self, project_id: int, mr_iid: int) -> str:
+    def get_projects(self, membership=True, owned=False, search=None):
+        return self.gl.projects.list(
+            membership=membership,
+            owned=owned,
+            search=search,
+            all=True,
+            simple=True
+        )
+
+    def get_project(self, project_id: int):
+        return self.gl.projects.get(project_id)
+
+    def get_mrs_by_project(
+        self,
+        project_id: int,
+        state: str = "merged",
+        source_branch: str | None = None,
+        target_branch: str | None = None
+    ):
+        project = self.gl.projects.get(project_id)
+
+        return project.mergerequests.list(
+            state=state,
+            source_branch=source_branch,
+            target_branch=target_branch,
+            all=True
+        )
+
+    def get_mr_diff(self, project_id: int, mr_iid: int, max_files=5, max_chars=2000) -> str:
         project = self.gl.projects.get(project_id)
         mr = project.mergerequests.get(mr_iid)
 
-        changes = mr.changes()
-        diff_text = ""
+        diff_versions = mr.diffs.list()
+        if not diff_versions:
+            return "No diff versions found"
 
-        for change in changes.get("changes", [])[:5]:
-            diff_text += f"\n--- {change['old_path']} -> {change['new_path']}\n"
-            diff_text += change.get("diff", "")[:2000]
+        latest = diff_versions[0]
+
+        diff_version = mr.diffs.get(latest.id)
+
+        diff_text = ""
+        for d in diff_version.diffs[:max_files]:
+            diff_text += f"\n--- {d['old_path']} -> {d['new_path']}\n"
+            diff_text += d.get("diff", "")[:max_chars]
 
         return diff_text or "No changes found"
 
@@ -36,6 +70,5 @@ class GitLabClient:
             "source_branch": mr.source_branch,
             "target_branch": mr.target_branch
         }
-
 
 gitlab_client = GitLabClient()
