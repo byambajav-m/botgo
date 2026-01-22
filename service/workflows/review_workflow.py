@@ -72,18 +72,21 @@ def post_summary_review(state: ReviewState):
         is_lgtm = suggestion.upper() == "LGTM"
 
         summary_block = f"""
-### 📌 Summary
+### (๑˃̵ᴗ˂̵)ﻭ Summary
+{summary}
+""".strip() if is_lgtm else f"""
+### (￢_￢) Summary
 {summary}
 """.strip()
 
         if is_lgtm:
             suggestion_block = """
-### ✅ Review Result
+### ヽ(・∀・)ﾉ GOOD JOB
 > **LGTM** — No blocking issues found.
 """.strip()
         else:
             suggestion_block = f"""
-### 🔍 Suggested Improvement
+### (╯°□°）╯ Suggested Improvement
 - {suggestion}
 """.strip()
 
