@@ -28,4 +28,10 @@ class Settings(BaseSettings):
     APP_NAME: str = "GitLab MR Reviewer"
     LOG_LEVEL: str = "INFO"
 
+    LANGSMITH_TRACING: bool = True
+    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
+    LANGSMITH_API_KEY: str = ""
+    LANGSMITH_PROJECT: str = "BotGo"
+    LANGCHAIN_TRACING_V2: bool = True
+
 settings = Settings()

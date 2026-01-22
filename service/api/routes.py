@@ -51,23 +51,11 @@ async def gitlab_webhook(payload: WebhookPayload):
     project_id = payload.project["id"]
     mr_iid = payload.object_attributes["iid"]
 
-    workflow = create_review_workflow()
-
-    initial_state: ReviewState = {
-        "project_id": project_id,
-        "mr_iid": mr_iid,
-        "diff": "",
-        "similar_contexts": [],
-        "review_summary": "",
-        "suggestion": "",
-        "error": None,
-    }
-
-    result = await workflow.ainvoke(initial_state)
+    task = review_merge_request.delay(project_id, mr_iid)
 
     return ReviewResponse(
         status="queued",
-        task_id="task.id",
+        task_id=task.id,
         project_id=project_id,
         mr_iid=mr_iid
     )
@@ -95,7 +83,7 @@ async def trigger_review(request: ReviewRequest):
         status="completed",
         project_id=request.project_id,
         mr_iid=request.mr_iid,
-        task_id="task_id"
+        task_id="task_iod"
     )
 
 @router.get("/api/projects")

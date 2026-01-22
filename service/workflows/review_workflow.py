@@ -1,64 +1,56 @@
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Optional
-
-from lmnr import observe
-
-from infrastructure import weaviate_client, gitlab_client, LLMWorker
-
+from infrastructure import gitlab_client, LLMWorker
 
 class ReviewState(TypedDict):
     project_id: int
     mr_iid: int
-    diff: str
+
+    summary_diff: str
+    full_diff: str
+
     similar_contexts: List[str]
+
+    inline_comments: List[dict]
+
     review_summary: str
     suggestion: str
+    confidence: str
+    reason: str
+
     error: Optional[str]
 
-@observe(name="fetch_mr_diff_step")
-def fetch_mr_diff(state: ReviewState):
-    try:
-        diff = gitlab_client.get_mr_diff(state["project_id"], state["mr_iid"])
-        state["diff"] = diff
-        return state
-    except Exception as e:
-        state["error"] = f"Failed to fetch MR: {str(e)}"
-        return state
 
-@observe(name="retrieve_context_step")
-def retrieve_context(state: ReviewState):
+def fetch_mr_diffs(state: ReviewState):
     try:
-        if state.get("error"):
-            return state
+        project_id = state["project_id"]
+        mr_iid = state["mr_iid"]
 
-        weaviate_client.store_diff(
-            state["project_id"],
-            state["mr_iid"],
-            state["diff"]
+        state["summary_diff"] = gitlab_client.get_mr_diff_summary(
+            project_id,
+            mr_iid,
         )
 
-        similar = weaviate_client.query_similar(state["diff"], n_results=3)
-        state["similar_contexts"] = similar
+        state["full_diff"] = gitlab_client.get_mr_diff_full(
+            project_id,
+            mr_iid,
+        )
 
         return state
+
     except Exception as e:
-        state["error"] = f"Weaviate error: {str(e)}"
+        state["error"] = f"Failed to fetch MR diffs: {str(e)}"
         return state
 
-@observe(name="generate_review_step")
-async def generate_review(state: ReviewState):
+
+async def generate_summary_review(state: ReviewState):
     try:
         if state.get("error"):
             return state
 
-        # summary, suggestion = ollama_client.generate_review(
-        #     state["diff"],
-        #     state["similar_contexts"]
-        # )
-
         summary, suggestion = await LLMWorker.generate_review(
-            state["diff"],
-            state["similar_contexts"]
+            diff=state["summary_diff"],
+            contexts=state["similar_contexts"],
         )
 
         state["review_summary"] = summary
@@ -66,52 +58,71 @@ async def generate_review(state: ReviewState):
         return state
 
     except Exception as e:
-        state["error"] = f"LLM error: {str(e)}"
+        state["error"] = f"Summary review error: {str(e)}"
         return state
 
-@observe(name="post_review_step")
-def post_review(state: ReviewState):
-
+def post_summary_review(state: ReviewState):
     try:
         if state.get("error"):
             return state
 
-        note_body = f"""## 🐪 BotGo Review
+        summary = (state.get("review_summary") or "").strip()
+        suggestion = (state.get("suggestion") or "").strip()
 
-                    **Summary:**
-                    {state["review_summary"]}
-                    
-                    **Suggestion:**
-                    {state["suggestion"]}
-        
-                    """
+        is_lgtm = suggestion.upper() == "LGTM"
+
+        summary_block = f"""
+### 📌 Summary
+{summary}
+""".strip()
+
+        if is_lgtm:
+            suggestion_block = """
+### ✅ Review Result
+> **LGTM** — No blocking issues found.
+""".strip()
+        else:
+            suggestion_block = f"""
+### 🔍 Suggested Improvement
+- {suggestion}
+""".strip()
+
+        note_body = f"""
+## 🐪 BotGo Review
+
+{summary_block}
+
+{suggestion_block}
+
+---
+<sub>Automated review • Focused on correctness, safety, and maintainability</sub>
+""".strip()
 
         gitlab_client.post_mr_note(
             state["project_id"],
             state["mr_iid"],
-            note_body
+            note_body,
         )
 
         return state
 
     except Exception as e:
-        state["error"] = f"Failed to post review: {str(e)}"
+        state["error"] = f"Failed to post summary review: {str(e)}"
         return state
 
 
-@observe(name="create_review_workflow")
+
 def create_review_workflow():
     workflow = StateGraph(ReviewState)
 
-    workflow.add_node("fetch_diff", fetch_mr_diff)
-    workflow.add_node("retrieve_context", retrieve_context)
-    workflow.add_node("generate_review", generate_review)
-    workflow.add_node("post_review", post_review)
+    workflow.add_node("fetch_diffs", fetch_mr_diffs)
+    workflow.add_node("summary_review", generate_summary_review)
+    workflow.add_node("post_summary", post_summary_review)
 
-    workflow.set_entry_point("fetch_diff")
-    workflow.add_edge("fetch_diff", "generate_review")
-    # workflow.add_edge("retrieve_context", "generate_review")
-    workflow.add_edge("generate_review", "post_review")
-    workflow.add_edge("post_review", END)
+    workflow.set_entry_point("fetch_diffs")
+
+    workflow.add_edge("fetch_diffs", "summary_review")
+    workflow.add_edge("summary_review", "post_summary")
+    workflow.add_edge("post_summary", END)
 
     return workflow.compile()
