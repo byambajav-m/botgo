@@ -233,8 +233,8 @@ class LLMWorker:
         response = await cls.client().chat.completions.create(
             model=settings.LLM_MODEL,
             messages=[{"role": "system", "content": prompt}],
-            temperature=0.01,
-            top_p=0.8,
+            temperature=0.0,
+            top_p=1.0,
         )
 
         return cls._parse_response(response.choices[0].message.content or "")
@@ -267,7 +267,7 @@ class LLMWorker:
 
         if suggestions and all(s.upper() == "LGTM" for s in suggestions):
             return (
-                "All changes across stacks are correct and consistent.",
+                " ".join(summaries) if summaries else "No significant changes detected.",
                 "LGTM",
             )
 
