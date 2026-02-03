@@ -23,15 +23,15 @@ class Settings(BaseSettings):
 
     LLM_BASE_URL: str = ""
     LLM_API_KEY: str = ""
-    LLM_MODEL: str =""
+    LLM_MODEL: str = ""
 
-    APP_NAME: str = "GitLab MR Reviewer"
-    LOG_LEVEL: str = "INFO"
+    APP_NAME: str = "BotGo"
+    APP_VERSION: str = "1.0.0"
+    APP_DESCRIPTION: str = "GitLab MR Reviewer"
 
-    LANGSMITH_TRACING: bool = True
-    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
-    LANGSMITH_API_KEY: str = ""
-    LANGSMITH_PROJECT: str = "BotGo"
-    LANGCHAIN_TRACING_V2: bool = True
+    LAMINAR_BASE_URL: str = "http://localhost"
+    LAMINAR_HTTP_PORT: int = 8000
+    LAMINAR_GRPC_PORT: int = 8001
+    LAMINAR_PROJECT_API_KEY: str = "y8RPCDg22GxxlCYBwFjHKO9MD6FiBn36b6RG7AKeQgiysjnkmlDVvIZsBVGQlf8b"
 
 settings = Settings()

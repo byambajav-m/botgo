@@ -5,18 +5,29 @@ from dotenv import load_dotenv
 
 load_dotenv()
 from config import settings
+from loguru import logger
+from contextlib import asynccontextmanager
 
-Laminar.initialize(
-    base_url="http://localhost",
-    http_port=8000,
-    grpc_port=8001,
-    project_api_key="y8RPCDg22GxxlCYBwFjHKO9MD6FiBn36b6RG7AKeQgiysjnkmlDVvIZsBVGQlf8b"
-)
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    logger.info("Starting up application...")
+
+    Laminar.initialize(
+        base_url=settings.LAMINAR_BASE_URL,
+        http_port=settings.LAMINAR_BASE_HTTP_PORT,
+        grpc_port=settings.LAMINAR_GRPC_PORT,
+        project_api_key=settings.LAMINAR_PROJECT_API_KEY,
+    )
+
+    yield
+
+    logger.info("Shutdown complete")
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="AI-powered GitLab MR reviewer",
-    version="1.0.0",
+    description=settings.APP_DESCRIPTION,
+    version=settings.APP_VERSION,
     cors_allowed_origins="*",
 )
 

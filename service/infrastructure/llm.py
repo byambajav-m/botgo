@@ -17,7 +17,6 @@ Global rules:
 Follow the output format exactly.
 """.strip()
 
-
 NO_ISSUE_RULE = """
 If the diff is correct and no concrete improvement is warranted:
 - Do NOT invent issues
@@ -223,10 +222,10 @@ class LLMWorker:
 
     @classmethod
     async def _review_stack(
-        cls,
-        diff: str,
-        contexts: list,
-        stack: str,
+            cls,
+            diff: str,
+            contexts: list,
+            stack: str,
     ) -> Tuple[str, str]:
         prompt = build_review_prompt(diff, contexts, stack)
 
@@ -241,9 +240,9 @@ class LLMWorker:
 
     @classmethod
     async def generate_review(
-        cls,
-        diff: str,
-        contexts: list,
+            cls,
+            diff: str,
+            contexts: list,
     ) -> Tuple[str, str]:
         file_diffs = split_diff_by_file(diff)
 
@@ -328,4 +327,3 @@ class LLMWorker:
             summary or "No summary generated.",
             suggestion,
         )
-
