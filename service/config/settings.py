@@ -34,4 +34,8 @@ class Settings(BaseSettings):
     LAMINAR_GRPC_PORT: int = 8001
     LAMINAR_PROJECT_API_KEY: str = "y8RPCDg22GxxlCYBwFjHKO9MD6FiBn36b6RG7AKeQgiysjnkmlDVvIZsBVGQlf8b"
 
+
+    MONGO_URI:str = "mongodb://localhost:27017"
+    MONGO_DB_NAME:str = "botgo"
+
 settings = Settings()

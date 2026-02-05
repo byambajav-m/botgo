@@ -18,3 +18,5 @@ loguru
 pydantic_settings
 langchain_ollama
 openai
+beanie
+motor

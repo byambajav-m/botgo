@@ -1,31 +1,35 @@
-from typing import Optional, Annotated
+from beanie import Document, PydanticObjectId, before_event, Insert, Replace
+from pydantic import Field, BaseModel
+from typing import List
+from datetime import datetime
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, EmailStr
+class ReviewVersion(BaseModel):
+    summary: str
+    suggestions: str
 
-PyObjectId = Annotated[str, BeforeValidator(str)]
+class Review(Document):
+    id: PydanticObjectId = Field(default_factory=PydanticObjectId)
 
-class StudentModel(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    name: str = Field(...)
-    email: EmailStr = Field(...)
-    course: str = Field(...)
-    gpa: float = Field(..., le=4.0)
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-        json_schema_extra={
-            "example": {
-                "name": "Jane Doe",
-                "email": "jdoe@example.com",
-                "course": "Experiments, Science, and Fashion in Nanophotonics",
-                "gpa": 3.0,
-            }
-        },
-    )
+    mr_title: str
+    project_id: int
+    project_name: str
+    mr_iid: int
+    author: str
+    diff: str
+    source_branch: str
+    target_branch: str
+    versions: List[ReviewVersion]
 
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
-class ProjectModel(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    name: str = Field(...)
-    iid: int = Field(...)
+    @before_event(Insert)
+    def set_created_at(self):
+        self.created_at = datetime.now()
 
+    @before_event(Replace)
+    def set_updated_at(self):
+        self.updated_at = datetime.now()
+
+    class Settings:
+        name = "reviews"

@@ -1,6 +1,7 @@
 import gitlab
 from config import settings
 from loguru import logger
+from typing import Dict, Any
 import sys
 
 logger.remove()
@@ -72,6 +73,69 @@ class GitLabClient:
                 state=state,
                 source_branch=source_branch,
                 target_branch=target_branch,
+            )
+            raise
+
+    def get_mr_data(
+            self,
+            project_id: int,
+            mr_iid: int,
+            max_files: int = 15,
+            max_chars: int = 2000,
+    ) -> Dict[str, Any]:
+        try:
+            project = self.gl.projects.get(project_id)
+            mr = project.mergerequests.get(mr_iid)
+            diff_versions = mr.diffs.list()
+            if not diff_versions:
+                logger.warning(
+                    "No diff versions found",
+                    project_id=project_id,
+                    mr_iid=mr_iid,
+                )
+                return {
+                    "project_name": project.name,
+                    "author": mr.author["username"],
+                    "source_branch": mr.source_branch,
+                    "target_branch": mr.target_branch,
+                    "summary_diff": "",
+                    "full_diff": "",
+                }
+
+            latest = diff_versions[0]
+            diff_version = mr.diffs.get(latest.id)
+
+            summary_diff = ""
+            full_diff = ""
+
+            for idx, d in enumerate(diff_version.diffs):
+                old_path = d["old_path"]
+                new_path = d["new_path"]
+                diff_body = d.get("diff", "")
+
+                full_diff += f"diff --git a/{old_path} b/{new_path}\n"
+                full_diff += diff_body
+                full_diff += "\n"
+
+                if idx < max_files:
+                    summary_diff += f"\n--- {old_path} -> {new_path}\n"
+                    summary_diff += diff_body[:max_chars]
+
+            return {
+                "project_name": project.name,
+                "author": mr.author["name"],
+                "source_branch": mr.source_branch,
+                "target_branch": mr.target_branch,
+                "summary_diff": summary_diff.strip(),
+                "full_diff": full_diff.strip(),
+                "mr_title": mr.title
+            }
+
+        except Exception:
+            logger.exception(
+                "Failed to fetch MR diff",
+                project_id=project_id,
+                mr_iid=mr_iid,
             )
             raise
 

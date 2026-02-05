@@ -67,11 +67,6 @@ async def trigger_review(request: ReviewRequest):
     initial_state: ReviewState = {
         "project_id": request.project_id,
         "mr_iid": request.mr_iid,
-        "diff": "",
-        "similar_contexts": [],
-        "review_summary": "",
-        "suggestion": "",
-        "error": None,
     }
 
     result = await workflow.ainvoke(initial_state)

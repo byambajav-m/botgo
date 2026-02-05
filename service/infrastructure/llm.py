@@ -24,6 +24,7 @@ If the diff is correct and no concrete improvement is warranted:
 - SUMMARY should briefly state that the change is sound and consistent
 """.strip()
 
+
 STACK_RULES = {
     "python": """
 Stack: Python backend (FastAPI, async services, Celery)
@@ -36,21 +37,6 @@ Review focus:
 - Background job idempotency and retries
 """.strip(),
 
-    "nuxt": """
-Stack: Nuxt.js application
-
-Review focus:
-- Correct usage of server-side rendering (SSR) vs client-only logic
-- Data fetching correctness (useAsyncData, useFetch, asyncData)
-- State hydration and mismatch risks
-- Route and layout boundaries
-- Runtime config usage and exposure
-- Plugin execution context (server vs client)
-- Middleware side effects and ordering
-
-Avoid stylistic preferences unless they affect correctness.
-""".strip(),
-
     "golang": """
 Stack: Go backend (net/http, Gin, gRPC, services)
 
@@ -61,38 +47,49 @@ Review focus:
 - Concurrency safety (channels, mutexes, shared state)
 - Resource cleanup (defer usage, closes)
 - API boundary correctness
-
-Avoid stylistic preferences unless they affect correctness.
 """.strip(),
 
     "frontend-ts": """
-Stack: Frontend (React, TypeScript)
+Stack: Frontend TypeScript (framework-agnostic)
 
 Review focus:
-- Component responsibility boundaries
+- Type safety and unsafe casts
 - State management correctness
-- useEffect dependency correctness
-- Rendering performance regressions
-- Type safety and accessibility regressions
+- Effect / lifecycle correctness
+- Rendering or computation inefficiencies
+- Accessibility regressions when applicable
 """.strip(),
 
-    "docs": """
-Stack: Documentation (README, markdown, docs)
+    "vue": """
+Stack: Vue.js frontend (Vue 2 / Vue 3)
 
 Review focus:
-- Accuracy and correctness
-- Missing or outdated information
-- Broken examples or commands
-- Inconsistencies with code behavior
+- Component responsibility and separation of concerns
+- Reactive state correctness (ref vs reactive, computed vs methods)
+- Watcher correctness and cleanup
+- Lifecycle hook usage and side effects
+- Template reactivity pitfalls (v-if vs v-show, key usage)
+- Prop / emit contract correctness
+- Performance issues from unnecessary reactivity
+""".strip(),
 
-Do not comment on tone unless it causes ambiguity.
+    "nuxt": """
+Stack: Nuxt.js application
+
+Review focus:
+- SSR vs client-only logic correctness
+- useAsyncData / useFetch / asyncData correctness
+- Hydration mismatch risks
+- Plugin execution context (server vs client)
+- Runtime config exposure
+- Middleware side effects and ordering
 """.strip(),
 
     "devops": """
 Stack: Infrastructure / DevOps
 
 Review focus:
-- Secret exposure and credential safety
+- Secret exposure
 - Idempotency of scripts and manifests
 - Rollback and failure recovery
 - Environment-specific risks
@@ -109,52 +106,47 @@ Review focus:
 - Migration safety and reversibility
 - Index usage and query efficiency
 """.strip(),
-
-    "vue": """
-Stack: Vue.js frontend (Vue 2 / Vue 3)
-
-Review focus:
-- Component responsibility and separation of concerns
-- Reactive state correctness (ref vs reactive, computed vs methods)
-- Watcher correctness and cleanup
-- Lifecycle hook usage and side effects
-- Template reactivity pitfalls (v-if vs v-show, key usage)
-- Prop / emit contract correctness
-- Performance issues from unnecessary reactivity
-
-Avoid stylistic preferences unless they affect correctness.
-""".strip(),
 }
 
+
 STACK_CLASSIFIER_PROMPT = """
-You are classifying the primary technology stack of a file diff.
+You are classifying the applicable technology stacks for a file diff.
 
 Rules:
-- Base your decision ONLY on the diff content
-- Documentation files (README.md, *.md, docs/) are "docs"
-- Go files (*.go, go.mod, go.sum) are "golang-backend"
-- Choose the single most relevant stack
-- If unclear, choose the closest match
+- Base decisions ONLY on the diff content
+- Return ALL applicable stacks
+- Nuxt implies Vue + frontend-ts, but still list them explicitly
+- Documentation files are "docs"
+- SQL / migrations are "data-sql"
 
-Return EXACTLY one of:
+Return a comma-separated list from:
 python
 golang
 frontend-ts
+vue
+nuxt
 devops
 data-sql
 docs
-vue
 
-Return only the value.
+Examples:
+- nuxt,vue,frontend-ts
+- vue,frontend-ts
+- frontend-ts
+- docs
+
+Return only the comma-separated values.
 """.strip()
 
-def build_review_prompt(diff: str, contexts: list, stack: str) -> str:
+def build_review_prompt(diff: str, contexts: list, stacks: List[str]) -> str:
     context_str = "\n---\n".join(contexts[:3]) if contexts else "None"
+
+    rules = "\n\n".join(STACK_RULES[s] for s in stacks if s in STACK_RULES)
 
     return f"""
 {BASE_REVIEW_CONTRACT}
 
-{STACK_RULES[stack]}
+{rules}
 
 {NO_ISSUE_RULE}
 
@@ -182,6 +174,7 @@ CONFIDENCE: <high | medium | low>
 REASON: <one short sentence>
 """.strip()
 
+
 FILE_DIFF_REGEX = re.compile(r"diff --git a/(.*?) b/.*?\n", re.DOTALL)
 
 def split_diff_by_file(diff: str) -> Dict[str, str]:
@@ -206,8 +199,9 @@ class LLMWorker:
             )
         return cls._client
 
+
     @classmethod
-    async def classify_stack(cls, file_diff: str) -> str:
+    async def classify_stacks(cls, file_diff: str) -> List[str]:
         response = await cls.client().chat.completions.create(
             model=settings.LLM_MODEL,
             messages=[
@@ -217,17 +211,19 @@ class LLMWorker:
             temperature=0.0,
         )
 
-        stack = (response.choices[0].message.content or "").strip()
-        return stack if stack in STACK_RULES else "python-backend"
+        raw = (response.choices[0].message.content or "").strip()
+        stacks = [s.strip() for s in raw.split(",") if s.strip() in STACK_RULES]
+
+        return stacks or ["frontend-ts"]
 
     @classmethod
-    async def _review_stack(
-            cls,
-            diff: str,
-            contexts: list,
-            stack: str,
+    async def _review(
+        cls,
+        diff: str,
+        contexts: list,
+        stacks: List[str],
     ) -> Tuple[str, str]:
-        prompt = build_review_prompt(diff, contexts, stack)
+        prompt = build_review_prompt(diff, contexts, stacks)
 
         response = await cls.client().chat.completions.create(
             model=settings.LLM_MODEL,
@@ -240,28 +236,24 @@ class LLMWorker:
 
     @classmethod
     async def generate_review(
-            cls,
-            diff: str,
-            contexts: list,
+        cls,
+        diff: str,
+        contexts: list,
     ) -> Tuple[str, str]:
         file_diffs = split_diff_by_file(diff)
-
-        stack_buckets: Dict[str, List[str]] = {}
-        for file_diff in file_diffs.values():
-            stack = await cls.classify_stack(file_diff)
-            stack_buckets.setdefault(stack, []).append(file_diff)
 
         summaries = []
         suggestions = []
 
-        for stack, diffs in stack_buckets.items():
-            combined_diff = "\n".join(diffs)
-            summary, suggestion = await cls._review_stack(
-                combined_diff,
+        for file_diff in file_diffs.values():
+            stacks = await cls.classify_stacks(file_diff)
+            summary, suggestion = await cls._review(
+                file_diff,
                 contexts,
-                stack,
+                stacks,
             )
-            summaries.append(f"[{stack}] {summary}")
+
+            summaries.append(f"[{','.join(stacks)}] {summary}")
             suggestions.append(suggestion)
 
         if suggestions and all(s.upper() == "LGTM" for s in suggestions):
@@ -275,19 +267,10 @@ class LLMWorker:
             " | ".join(s for s in suggestions if s.upper() != "LGTM") or "LGTM",
         )
 
+
     @staticmethod
     def _parse_response(content: str) -> Tuple[str, str]:
         text = content.strip()
-
-        replacements = {
-            "SUGGESTION :": "SUGGESTION:",
-            "SUMMARY :": "SUMMARY:",
-            "CONFIDENCE :": "CONFIDENCE:",
-            "REASON :": "REASON:",
-        }
-
-        for bad, good in replacements.items():
-            text = text.replace(bad, good)
 
         fields = {
             "SUMMARY:": "",
@@ -311,13 +294,7 @@ class LLMWorker:
         summary = fields["SUMMARY:"].strip()
         suggestion = fields["SUGGESTION:"].strip()
 
-        if not suggestion:
-            if "SUGGESTION:" in text:
-                suggestion = text.split("SUGGESTION:", 1)[1].strip()
-            else:
-                suggestion = "LGTM"
-
-        if suggestion.upper() == "LGTM":
+        if not suggestion or suggestion.upper() == "LGTM":
             return (
                 summary or "No issues were found during review.",
                 "LGTM",
