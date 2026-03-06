@@ -1,6 +1,7 @@
 from celery import Celery
 from config import settings
 from workflows import create_review_workflow, ReviewState
+from infrastructure.mongo import connect_to_mongo
 import asyncio
 
 celery_app = Celery(
@@ -21,6 +22,7 @@ celery_app.conf.update(
 @celery_app.task(name="review_merge_request")
 def review_merge_request(project_id: int, mr_iid: int):
     async def run():
+        await connect_to_mongo()
         workflow = create_review_workflow()
         return await workflow.ainvoke({
             "project_id": project_id,
