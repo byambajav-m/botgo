@@ -36,4 +36,7 @@ def review_merge_request(project_id: int, mr_iid: int):
 
     result = asyncio.run(run())
 
-    return result
+    if result.get("error"):
+        raise RuntimeError(result["error"])
+
+    return {"status": "ok"}
